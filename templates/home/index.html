@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Servicio de prompts</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 720px; color: #222; }
+        h1 { font-size: 2.25rem; margin-bottom: 0.5rem; }
+        p { color: #555; }
+        form { margin-top: 1.5rem; display: grid; gap: 1rem; }
+        textarea { width: 100%; min-height: 180px; padding: 1rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 0.5rem; resize: vertical; }
+        button { justify-self: start; background-color: #2563eb; border: none; padding: 0.85rem 1.8rem; border-radius: 0.5rem; color: #fff; font-weight: 600; cursor: pointer; }
+        button[disabled] { background-color: #9ca3af; cursor: not-allowed; }
+        .status { margin-top: 1rem; min-height: 1.5rem; font-weight: 500; }
+        .status.error { color: #b91c1c; }
+        .status.success { color: #15803d; }
+        .answer { margin-top: 1.5rem; padding: 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; background-color: #f8fafc; min-height: 3rem; white-space: pre-wrap; }
+        .actions { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+        .actions button { padding: 0.65rem 1.4rem; background-color: #1d4ed8; }
+        .actions button.secondary { background-color: #6b7280; }
+        .actions .input-action { display: flex; gap: 0.5rem; align-items: center; }
+        .actions .input-action input { padding: 0.45rem 0.65rem; border-radius: 0.35rem; border: 1px solid #d1d5db; }
+    </style>
+</head>
+<body>
+    <h1>Servicio de prompts</h1>
+    <p>Introduce una pregunta o un comando JSON y pulsa en <strong>Enviar</strong>. Escribe <code>help</code> para ver los comandos disponibles.</p>
+
+    <form id="prompt-form">
+        {% csrf_token %}
+        <label for="message">Mensaje</label>
+        <textarea id="message" name="message" placeholder="Pregunta al asistente o envia un comando JSON..."></textarea>
+        <button type="submit" id="submit-button">Enviar</button>
+    </form>
+
+    <div id="status" class="status"></div>
+    <div id="answer" class="answer"></div>
+    <div id="actions" class="actions"></div>
+
+    <script>
+        (function() {
+            const form = document.getElementById('prompt-form');
+            const messageField = document.getElementById('message');
+            const statusBox = document.getElementById('status');
+            const answerBox = document.getElementById('answer');
+            const submitButton = document.getElementById('submit-button');
+            const actionsBox = document.getElementById('actions');
+            let pendingToken = null;
+
+            function renderAnswer(answer) {
+                answerBox.textContent = answer || '';
+            }
+
+            function clearActions() {
+                actionsBox.innerHTML = '';
+            }
+
+            function createActionButton(label, payload, isSecondary) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = label;
+                if (isSecondary) {
+                    button.classList.add('secondary');
+                }
+                button.addEventListener('click', function() {
+                    sendPayload(payload);
+                });
+                return button;
+            }
+
+            function createActionInput(label, field) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'input-action';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = label;
+
+                const submit = document.createElement('button');
+                submit.type = 'button';
+                submit.textContent = 'Enviar';
+                submit.addEventListener('click', function() {
+                    const value = input.value.trim();
+                    if (!value) {
+                        input.focus();
+                        return;
+                    }
+                    const payload = { pending_token: pendingToken, data: {} };
+                    payload.data[field] = value;
+                    sendPayload(payload);
+                });
+
+                wrapper.appendChild(input);
+                wrapper.appendChild(submit);
+                return wrapper;
+            }
+
+            function renderActions(actions) {
+                clearActions();
+                if (!actions || !actions.length) {
+                    return;
+                }
+                actions.forEach(function(action) {
+                    if (!action || typeof action !== 'object') {
+                        return;
+                    }
+                    const payload = Object.assign({}, action.payload || {});
+                    if (!payload.pending_token && pendingToken) {
+                        payload.pending_token = pendingToken;
+                    }
+                    if (action.type === 'input') {
+                        const field = payload.field || 'value';
+                        actionsBox.appendChild(createActionInput(action.label || field, field));
+                        return;
+                    }
+                    const isSecondary = action.label && action.label.toLowerCase().includes('cancel');
+                    actionsBox.appendChild(createActionButton(action.label || 'Accion', payload, isSecondary));
+                });
+            }
+
+            function sendPayload(payload) {
+                submitButton.disabled = true;
+                statusBox.textContent = 'Enviando...';
+                statusBox.className = 'status';
+
+                fetch('/prompts/submit/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify(payload),
+                })
+                .then(handleResponse)
+                .catch(handleError)
+                .finally(function() {
+                    submitButton.disabled = false;
+                });
+            }
+
+            function getCsrfToken() {
+                const csrfInput = form.querySelector('input[name="csrfmiddlewaretoken"]');
+                return csrfInput ? csrfInput.value : '';
+            }
+
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+
+                const message = (messageField.value || '').trim();
+                if (!message) {
+                    statusBox.textContent = 'El mensaje no puede estar vacio.';
+                    statusBox.className = 'status error';
+                    return;
+                }
+
+                pendingToken = null;
+                submitButton.disabled = true;
+                statusBox.textContent = 'Enviando...';
+                statusBox.className = 'status';
+                renderAnswer('');
+                clearActions();
+
+                fetch('/prompts/submit/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ message: message }),
+                })
+                .then(handleResponse)
+                .catch(handleError)
+                .finally(function() {
+                    submitButton.disabled = false;
+                });
+            });
+
+            function handleResponse(response) {
+                if (!response.ok) {
+                    return response.json().then(function(data) {
+                        throw new Error(data.error || 'Error inesperado.');
+                    });
+                }
+                return response.json().then(function(data) {
+                    statusBox.textContent = data.detail || 'Mensaje recibido correctamente.';
+                    statusBox.className = data.status === 'pending' ? 'status' : 'status success';
+                    renderAnswer(data.answer || '');
+                    clearActions();
+
+                    if (data.pending_token) {
+                        pendingToken = data.pending_token;
+                    }
+
+                    if (Array.isArray(data.actions)) {
+                        renderActions(data.actions);
+                    }
+
+                    if (data.status !== 'pending') {
+                        pendingToken = null;
+                    }
+
+                    return data;
+                });
+            }
+
+            function handleError(error) {
+                statusBox.textContent = error.message;
+                statusBox.className = 'status error';
+                renderAnswer('');
+                clearActions();
+                pendingToken = null;
+            }
+        })();
+    </script>
+</body>
+</html>

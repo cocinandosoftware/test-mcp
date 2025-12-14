@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Eliminar categoria</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 640px; color: #222; }
+        h1 { font-size: 1.8rem; margin-bottom: 1rem; }
+        p { margin-bottom: 1.5rem; }
+        form { display: flex; gap: 1rem; }
+        button { padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; background-color: #b91c1c; color: #fff; font-weight: 600; cursor: pointer; }
+        a { color: #2563eb; align-self: center; }
+    </style>
+</head>
+<body>
+    <h1>Eliminar categoria</h1>
+    <p>Estas a punto de eliminar "{{ category.name }}". Esta accion es irreversible. Los productos asociados permaneceran sin esta categoria.</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Eliminar definitivamente</button>
+        <a href="{% url 'products:category-list' %}">Cancelar</a>
+    </form>
+</body>
+</html>

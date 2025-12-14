@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Gestion de categorias</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 720px; color: #222; }
+        header { display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 2rem; }
+        a.button { display: inline-block; margin-left: 0.75rem; padding: 0.5rem 1.1rem; background-color: #2563eb; color: #fff; border-radius: 0.4rem; text-decoration: none; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
+        th, td { border: 1px solid #ccc; padding: 0.6rem; text-align: left; }
+        th { background-color: #f1f5f9; }
+        .actions a { margin-right: 0.5rem; }
+        .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 0.4rem; background-color: #16a34a; color: #fff; font-size: 0.75rem; text-transform: uppercase; }
+        .badge.inactive { background-color: #b91c1c; }
+        .messages { margin-top: 1rem; }
+        .messages li { list-style: none; margin-bottom: 0.5rem; padding: 0.6rem 0.8rem; border-radius: 0.4rem; }
+        .messages li.success { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .messages li.error { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Gestion de categorias</h1>
+        <div>
+            <a href="{% url 'products:category-create' %}" class="button">Nueva categoria</a>
+            <a href="{% url 'products:product-manage' %}" class="button">Volver a productos</a>
+        </div>
+    </header>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li class="{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Descripcion</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in categories %}
+                <tr>
+                    <td>{{ category.name }}</td>
+                    <td>{{ category.description|default:'Sin descripcion' }}</td>
+                    <td>
+                        {% if category.is_active %}
+                            <span class="badge">Activa</span>
+                        {% else %}
+                            <span class="badge inactive">Inactiva</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'products:category-update' category.pk %}">Editar</a>
+                        <a href="{% url 'products:category-delete' category.pk %}">Eliminar</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="4">Todavia no hay categorias registradas.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

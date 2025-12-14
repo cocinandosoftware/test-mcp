@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Gestion de productos</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 960px; color: #222; }
+        header { display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 2rem; }
+        .button { display: inline-block; margin-right: 0.75rem; padding: 0.5rem 1.1rem; background-color: #2563eb; color: #fff; border-radius: 0.4rem; text-decoration: none; font-weight: 600; border: none; cursor: pointer; }
+        .button.secondary { background-color: #475569; }
+        .button.ghost { background-color: #fff; color: #1f2937; border: 1px solid #cbd5f5; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
+        th, td { border: 1px solid #ccc; padding: 0.6rem; text-align: left; vertical-align: top; }
+        th { background-color: #f1f5f9; }
+        ul { margin: 0; padding-left: 1.1rem; }
+        .actions a { margin-right: 0.5rem; }
+        .actions button { margin-right: 0.5rem; }
+        .badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 0.4rem; background-color: #16a34a; color: #fff; font-size: 0.75rem; text-transform: uppercase; }
+        .badge.inactive { background-color: #b91c1c; }
+        .messages { margin-top: 1rem; }
+        .messages li { list-style: none; margin-bottom: 0.5rem; padding: 0.6rem 0.8rem; border-radius: 0.4rem; }
+        .messages li.success { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .messages li.error { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        section { margin-top: 2.5rem; }
+        #cart-panel { position: fixed; top: 2rem; right: 2rem; width: min(28rem, 90vw); max-height: 80vh; overflow-y: auto; border: 1px solid #cbd5f5; background-color: #f8fafc; padding: 1.25rem; border-radius: 0.8rem; display: none; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25); z-index: 1000; }
+        #cart-panel.open { display: block; }
+        #cart-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; z-index: 999; }
+        #cart-backdrop.open { display: block; }
+        #cart-items { padding-left: 1.1rem; }
+        #cart-items li { margin-bottom: 0.4rem; }
+        #cart-actions { margin-top: 1rem; display: flex; gap: 0.75rem; }
+        #cart-actions button { padding: 0.5rem 1rem; border: none; border-radius: 0.4rem; cursor: pointer; font-weight: 600; }
+        #checkout-button { background-color: #0f766e; color: #fff; }
+        #clear-cart-button { background-color: #b91c1c; color: #fff; }
+        #cart-feedback { margin-top: 0.75rem; font-weight: 500; min-height: 1.2rem; }
+        #purchases-table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
+        #purchases-table ul { margin: 0; padding-left: 1.1rem; }
+        #purchases-feedback { margin-top: 0.75rem; min-height: 1.2rem; font-weight: 500; color: #0f172a; }
+        .table-empty { text-align: center; color: #475569; font-style: italic; }
+        .table-actions { white-space: nowrap; }
+        .table-actions button { padding: 0.4rem 0.7rem; border: none; border-radius: 0.4rem; background-color: #ef4444; color: #fff; cursor: pointer; font-weight: 600; }
+        #cart-empty { color: #475569; font-style: italic; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Gestion de productos</h1>
+        <nav>
+            <a href="{% url 'products:product-create' %}" class="button">Nuevo producto</a>
+            <a href="{% url 'products:category-list' %}" class="button secondary">Gestionar categorias</a>
+            <button type="button" id="toggle-cart" class="button ghost">Carrito (0)</button>
+        </nav>
+    </header>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li class="{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Categorias</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+                <tr>
+                    <td>{{ product.name }}</td>
+                    <td>{{ product.price }} EUR</td>
+                    <td>{{ product.stock }}</td>
+                    <td>
+                        {% if product.categories.all %}
+                            <ul>
+                                {% for category in product.categories.all %}
+                                    <li>{{ category.name }}</li>
+                                {% empty %}
+                                    <li>Sin categorias</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            Sin categorias
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if product.is_active %}
+                            <span class="badge">Activo</span>
+                        {% else %}
+                            <span class="badge inactive">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <button type="button" data-add-to-cart="{{ product.pk }}">Añadir al carrito</button>
+                        <a href="{% url 'products:product-update' product.pk %}">Editar</a>
+                        <a href="{% url 'products:product-delete' product.pk %}">Eliminar</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">Todavia no hay productos creados.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div id="cart-backdrop" aria-hidden="true"></div>
+    <section id="cart-panel" role="dialog" aria-live="polite" aria-label="Carrito de compra">
+        <h2>Carrito de compra</h2>
+        <div id="cart-content">
+            <p id="cart-empty">El carrito esta vacio.</p>
+        </div>
+        <div id="cart-total"></div>
+        <div id="cart-actions">
+            <button type="button" id="checkout-button">Confirmar compra</button>
+            <button type="button" id="clear-cart-button">Vaciar carrito</button>
+        </div>
+        <div id="cart-feedback"></div>
+    </section>
+
+    <section>
+        <h2>Compras registradas</h2>
+        <table id="purchases-table">
+            <thead>
+                <tr>
+                    <th>Compra</th>
+                    <th>Fecha</th>
+                    <th>Total</th>
+                    <th>Articulos</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="purchases-body">
+                <tr>
+                    <td colspan="5" class="table-empty">Cargando compras...</td>
+                </tr>
+            </tbody>
+        </table>
+        <div id="purchases-feedback" aria-live="polite"></div>
+    </section>
+
+    {{ purchases_data|json_script:"initial-purchases-data" }}
+    {{ initial_cart|json_script:"initial-cart-data" }}
+
+    <script>
+        (function() {
+            const addButtons = document.querySelectorAll('[data-add-to-cart]');
+            const toggleCartButton = document.getElementById('toggle-cart');
+            const cartPanel = document.getElementById('cart-panel');
+            const cartContent = document.getElementById('cart-content');
+            const cartTotal = document.getElementById('cart-total');
+            const cartFeedback = document.getElementById('cart-feedback');
+            const checkoutButton = document.getElementById('checkout-button');
+            const clearCartButton = document.getElementById('clear-cart-button');
+            const purchasesBody = document.getElementById('purchases-body');
+            const purchasesFeedback = document.getElementById('purchases-feedback');
+            const cartBackdrop = document.getElementById('cart-backdrop');
+
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return '';
+            }
+
+            const csrfToken = getCookie('csrftoken');
+
+            function updateToggleLabel(count) {
+                const base = cartPanel.classList.contains('open') ? 'Cerrar carrito' : 'Carrito';
+                toggleCartButton.textContent = `${base} (${count})`;
+            }
+
+            function renderCart(cart) {
+                cartContent.innerHTML = '';
+                cartTotal.textContent = '';
+
+                if (!cart || !cart.items || cart.items.length === 0) {
+                    cartContent.innerHTML = '<p id="cart-empty">El carrito esta vacio.</p>';
+                    updateToggleLabel(0);
+                    return;
+                }
+
+                const list = document.createElement('ul');
+                list.id = 'cart-items';
+                cart.items.forEach(function(item) {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.name} x${item.quantity} — ${item.line_total} EUR`;
+                    list.appendChild(li);
+                });
+                cartContent.appendChild(list);
+                cartTotal.textContent = `Total: ${cart.total} EUR`;
+                updateToggleLabel(cart.count || 0);
+            }
+
+            function setPurchasesMessage(message) {
+                purchasesBody.innerHTML = `<tr><td colspan="5" class="table-empty">${message}</td></tr>`;
+            }
+
+            function renderPurchases(purchases) {
+                purchasesBody.innerHTML = '';
+                if (!purchases || purchases.length === 0) {
+                    setPurchasesMessage('No hay compras registradas todavia.');
+                    return;
+                }
+
+                purchases.forEach(function(purchase) {
+                    const row = document.createElement('tr');
+                    const date = new Date(purchase.created_at);
+                    const items = (purchase.items || []).map(function(item) {
+                        return `<li>${item.product} x${item.quantity} — ${item.line_total} EUR`;
+                    }).join('');
+                    row.innerHTML = `
+                        <td>#${purchase.id}</td>
+                        <td>${date.toLocaleString()}</td>
+                        <td>${purchase.total_price} EUR</td>
+                        <td>${items ? `<ul>${items}</ul>` : '<span>Sin productos</span>'}</td>
+                        <td class="table-actions"><button type="button" data-delete-purchase="${purchase.id}">Eliminar</button></td>
+                    `;
+                    purchasesBody.appendChild(row);
+                });
+            }
+
+            function handleResponse(response) {
+                if (!response.ok) {
+                    return response.json().then(function(data) {
+                        throw new Error(data.error || 'Error inesperado.');
+                    });
+                }
+                return response.json();
+            }
+
+            function addToCart(productId) {
+                cartFeedback.textContent = 'Añadiendo producto...';
+                fetch('/products/cart/add/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({ product_id: productId }),
+                })
+                .then(handleResponse)
+                .then(function(data) {
+                    cartFeedback.textContent = data.detail || 'Producto agregado.';
+                    renderCart(data.cart);
+                    toggleCart(true);
+                })
+                .catch(function(error) {
+                    cartFeedback.textContent = error.message;
+                });
+            }
+
+            function loadCart() {
+                fetch('/products/cart/', { headers: { 'Accept': 'application/json' } })
+                    .then(handleResponse)
+                    .then(function(data) {
+                        renderCart(data.cart);
+                    })
+                    .catch(function() {
+                        renderCart({ items: [], count: 0 });
+                    });
+            }
+
+            function clearCart() {
+                cartFeedback.textContent = 'Vaciando carrito...';
+                fetch('/products/cart/clear/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                })
+                .then(handleResponse)
+                .then(function(data) {
+                    cartFeedback.textContent = data.detail || 'Carrito vaciado';
+                    renderCart(data.cart);
+                })
+                .catch(function(error) {
+                    cartFeedback.textContent = error.message;
+                });
+            }
+
+            function loadPurchases() {
+                purchasesFeedback.textContent = '';
+                fetch('/products/purchases/', { headers: { 'Accept': 'application/json' } })
+                    .then(handleResponse)
+                    .then(function(data) {
+                        renderPurchases(data.purchases);
+                    })
+                    .catch(function() {
+                        setPurchasesMessage('No fue posible cargar las compras.');
+                    });
+            }
+
+            function checkoutCart() {
+                cartFeedback.textContent = 'Registrando compra...';
+                fetch('/products/cart/checkout/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                })
+                .then(handleResponse)
+                .then(function(data) {
+                    cartFeedback.textContent = data.detail || 'Compra registrada.';
+                    renderCart(data.cart);
+                    if (data.purchases) {
+                        renderPurchases(data.purchases);
+                    } else {
+                        loadPurchases();
+                    }
+                })
+                .catch(function(error) {
+                    cartFeedback.textContent = error.message;
+                });
+            }
+
+            function deletePurchase(purchaseId) {
+                purchasesFeedback.textContent = 'Eliminando compra...';
+                fetch(`/products/purchases/${purchaseId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                })
+                .then(handleResponse)
+                .then(function(data) {
+                    purchasesFeedback.textContent = data.detail || 'Compra eliminada.';
+                    renderPurchases(data.purchases);
+                })
+                .catch(function(error) {
+                    purchasesFeedback.textContent = error.message;
+                });
+            }
+
+            function toggleCart(forceOpen) {
+                const shouldOpen = forceOpen !== undefined ? forceOpen : !cartPanel.classList.contains('open');
+                if (shouldOpen) {
+                    cartPanel.classList.add('open');
+                    cartBackdrop.classList.add('open');
+                } else {
+                    cartPanel.classList.remove('open');
+                    cartBackdrop.classList.remove('open');
+                }
+                const text = toggleCartButton.textContent;
+                const match = text.match(/\((\d+)\)/);
+                const currentCount = match ? parseInt(match[1], 10) : 0;
+                updateToggleLabel(currentCount);
+            }
+
+            toggleCartButton.addEventListener('click', function() {
+                toggleCart();
+            });
+
+            cartBackdrop.addEventListener('click', function() {
+                toggleCart(false);
+            });
+
+            addButtons.forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const productId = button.getAttribute('data-add-to-cart');
+                    addToCart(productId);
+                });
+            });
+
+            checkoutButton.addEventListener('click', checkoutCart);
+            clearCartButton.addEventListener('click', clearCart);
+            purchasesBody.addEventListener('click', function(event) {
+                const target = event.target.closest('[data-delete-purchase]');
+                if (!target) {
+                    return;
+                }
+                const purchaseId = target.getAttribute('data-delete-purchase');
+                deletePurchase(purchaseId);
+            });
+
+            const initialCartNode = document.getElementById('initial-cart-data');
+            if (initialCartNode) {
+                const initialCart = JSON.parse(initialCartNode.textContent);
+                renderCart(initialCart);
+            } else {
+                loadCart();
+            }
+
+            const initialPurchasesNode = document.getElementById('initial-purchases-data');
+            if (initialPurchasesNode) {
+                const initialPurchases = JSON.parse(initialPurchasesNode.textContent);
+                renderPurchases(initialPurchases);
+            } else {
+                loadPurchases();
+            }
+        })();
+    </script>
+</body>
+</html>
